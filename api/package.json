@@ -1,0 +1,8 @@
+{
+  "name": "prompt-league-api",
+  "version": "1.0.0",
+  "description": "Prompt League scoring proxy",
+  "engines": {
+    "node": ">=18"
+  }
+}
