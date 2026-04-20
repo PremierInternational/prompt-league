@@ -4,5 +4,8 @@
   "description": "Prompt League scoring proxy",
   "engines": {
     "node": ">=18"
+  },
+  "dependencies": {
+    "@azure/data-tables": "^13.3.0"
   }
 }

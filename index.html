@@ -840,74 +840,12 @@ Respond ONLY with valid JSON. No preamble, no markdown fences.
 }`;
 
 // ── WEEKLY CHALLENGES ────────────────────────────────────────────────────────
-// season_start is the Monday of Week 1. Each subsequent week starts 7 days later.
-const SEASONS = [
-  { number: 1, name: "Foundations", subtitle: "Core prompting skills", season_start: '2026-04-27', weeks: 6 },
-  { number: 2, name: "Applied Skills", subtitle: "Role-specific use cases", season_start: '2026-06-08', weeks: 6 },
-  { number: 3, name: "Advanced", subtitle: "Power techniques", season_start: '2026-07-20', weeks: 6 },
-];
-
-const CHALLENGES = [
-  // ── Season 1 — Foundations (Weeks 1–6) ──
-  { week: 1, season: 1, title: "Prepare for your 1:1", skill: "Context",
-    desc: "Use Claude to prep for tomorrow's manager check-in — updates, blockers, priorities.",
-    starter: "Help me prepare for my 1:1 with my manager tomorrow." },
-  { week: 2, season: 1, title: "Write a stakeholder update", skill: "Specificity",
-    desc: "Draft a concise project status email for a senior stakeholder who skims. One dependency is at risk.",
-    starter: "Write a project status update email for my stakeholder." },
-  { week: 3, season: 1, title: "Explain a technical concept", skill: "Role-setting",
-    desc: "Explain a concept from your work (e.g. data pipeline, API, process) to a non-technical audience.",
-    starter: "Explain this technical concept in simple terms." },
-  { week: 4, season: 1, title: "Summarise a long document", skill: "Clarity",
-    desc: "Get Claude to distil a lengthy report, contract, or spec into exactly what you need — no more.",
-    starter: "Summarise this document for me." },
-  { week: 5, season: 1, title: "Generate interview questions", skill: "Technique",
-    desc: "Create tailored interview questions for a role on your team — using few-shot examples to guide tone.",
-    starter: "Generate some interview questions for a role on my team." },
-  { week: 6, season: 1, title: "Build a 30-60-90 day plan", skill: "Specificity",
-    desc: "Prompt Claude to produce a structured onboarding plan for a new team member joining your project.",
-    starter: "Create a 30-60-90 day plan for a new team member." },
-
-  // ── Season 2 — Applied Skills (Weeks 7–12) ──
-  { week: 7, season: 2, title: "Debug a disagreement", skill: "Role-setting",
-    desc: "Use Claude to help navigate a real conflict or misalignment — get it to steelman both sides.",
-    starter: "Help me think through a disagreement I'm having at work." },
-  { week: 8, season: 2, title: "Write a SQL query (or automate a task)", skill: "Context",
-    desc: "Technical: ask Claude to write or optimise a query. Non-technical: ask it to automate a repetitive task you do manually.",
-    starter: "Help me write a SQL query to solve this problem." },
-  { week: 9, season: 2, title: "Turn meeting notes into actions", skill: "Clarity",
-    desc: "Feed Claude messy meeting notes and get a clean action register with owners, deadlines, and priorities.",
-    starter: "Turn these meeting notes into action items." },
-  { week: 10, season: 2, title: "Write a client proposal section", skill: "Technique",
-    desc: 'Draft the "our approach" section of a proposal for a data services engagement — tailored to a specific client type.',
-    starter: "Help me write the approach section of a client proposal." },
-  { week: 11, season: 2, title: "Build a decision framework", skill: "Iteration",
-    desc: "Ask Claude to help you think through a real decision — tool choice, vendor, approach — using structured reasoning.",
-    starter: "Help me make a decision about something at work." },
-  { week: 12, season: 2, title: "Create a data quality checklist", skill: "Specificity",
-    desc: "Generate a practical QA checklist for a dataset or deliverable your team produces — specific enough to actually use.",
-    starter: "Create a data quality checklist for my team." },
-
-  // ── Season 3 — Advanced (Weeks 13–18) ──
-  { week: 13, season: 3, title: "Red-team your own work", skill: "Role-setting",
-    desc: "Ask Claude to find weaknesses in a plan, proposal, or design you've produced — then strengthen it.",
-    starter: "Find weaknesses in this plan I've written." },
-  { week: 14, season: 3, title: "Chain-of-thought problem solving", skill: "Technique",
-    desc: "Solve a complex work problem by explicitly asking Claude to think step by step before answering.",
-    starter: "Help me solve this complex problem step by step." },
-  { week: 15, season: 3, title: "Write a post-mortem", skill: "Context",
-    desc: "Turn a project incident or missed deadline into a structured blameless post-mortem with root causes and remediation.",
-    starter: "Help me write a post-mortem for a project issue." },
-  { week: 16, season: 3, title: "Build a personal prompt library", skill: "Iteration",
-    desc: "Ask Claude to help you design a reusable prompt template for a task you do every week — then test it.",
-    starter: "Help me create a reusable prompt template." },
-  { week: 17, season: 3, title: "Analyse a dataset pattern", skill: "Context",
-    desc: "Describe a dataset or trend you're seeing at work and ask Claude to hypothesise causes and suggest next steps.",
-    starter: "Help me analyse a pattern in this data." },
-  { week: 18, season: 3, title: "The open challenge", skill: "Iteration",
-    desc: "No prescribed task — submit the most useful thing Claude helped you do this week. Scored on output quality and technique.",
-    starter: "Help me with something useful at work." },
-];
+// Challenges + seasons live in /challenges.json so non-devs can edit them via
+// GitHub's web UI without touching HTML. season_start is the Monday of that
+// season's Week 1 — each subsequent week starts 7 days later.
+let SEASONS = [];
+let CHALLENGES = [];
+let CHALLENGE = null;
 
 function getCurrentChallenge() {
   const now = new Date();
@@ -930,8 +868,6 @@ function getCurrentChallenge() {
   return { ...CHALLENGES[0], seasonName: s.name, seasonSub: s.subtitle };
 }
 
-const CHALLENGE = getCurrentChallenge();
-
 // ── PROXY URL ────────────────────────────────────────────────────────────────
 const PROXY_URL = '/api/score';
 
@@ -939,7 +875,27 @@ const PROXY_URL = '/api/score';
 let currentLeaderboardView = 'weekly';
 
 // ── INIT ─────────────────────────────────────────────────────────────────────
-(function init() {
+(async function init() {
+  try {
+    // Cache-bust so edits to challenges.json show up without a hard refresh.
+    const res = await fetch('/challenges.json?v=' + Date.now());
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    if (!Array.isArray(data.seasons) || !Array.isArray(data.challenges) || !data.seasons.length || !data.challenges.length) {
+      throw new Error('challenges.json is missing seasons or challenges');
+    }
+
+    SEASONS = data.seasons;
+    CHALLENGES = data.challenges;
+    CHALLENGE = getCurrentChallenge();
+  } catch (e) {
+    console.error('Failed to load challenges.json:', e);
+    showError('Could not load this week\'s challenge. Please refresh in a moment, or contact the Prompt League admin if this persists.');
+    document.getElementById('submit-btn').disabled = true;
+    return;
+  }
+
   // Populate challenge UI
   document.getElementById('week-chip').textContent = `Week ${CHALLENGE.week} · Season ${CHALLENGE.season}`;
   document.getElementById('challenge-eyebrow').textContent = `Week ${CHALLENGE.week} Challenge · ${CHALLENGE.skill}`;
@@ -1012,7 +968,7 @@ async function submitPrompt() {
     const result = JSON.parse(raw.replace(/```json|```/g,'').trim());
 
     // Save to server database
-    await fetch('/api/submissions', {
+    const saveRes = await fetch('/api/submissions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1027,7 +983,14 @@ async function submitPrompt() {
     });
 
     renderScoreCard(result);
-    fetchLeaderboard(currentLeaderboardView);
+
+    if (!saveRes.ok) {
+      const detail = await saveRes.json().catch(() => ({}));
+      console.error('Submission save failed:', saveRes.status, detail);
+      showError(`Your score is shown above but wasn't saved to the leaderboard (status ${saveRes.status}). ${detail.error || 'Check the server configuration.'}`);
+    } else {
+      fetchLeaderboard(currentLeaderboardView);
+    }
 
   } catch(e) {
     clearInterval(ticker);

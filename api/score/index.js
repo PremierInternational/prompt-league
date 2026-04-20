@@ -52,8 +52,30 @@ module.exports = async function (context, req) {
     messages,
   });
 
+  // Retry transient Anthropic errors (overload / rate-limit / 5xx) with
+  // jittered exponential backoff. Fixed schedule keeps total added latency
+  // bounded well under the SWA Free plan function timeout.
+  const RETRY_DELAYS_MS = [500, 1500, 3500];
+  const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504, 529]);
+
   try {
-    const result = await callAnthropic(payload, KEY);
+    let result;
+    let attempt = 0;
+    while (true) {
+      result = await callAnthropic(payload, KEY);
+
+      if (!RETRYABLE_STATUS.has(result.status) || attempt >= RETRY_DELAYS_MS.length) {
+        break;
+      }
+
+      const delay = RETRY_DELAYS_MS[attempt] + Math.floor(Math.random() * 250);
+      context.log.warn(
+        `Anthropic returned ${result.status}; retrying in ${delay}ms (attempt ${attempt + 1}/${RETRY_DELAYS_MS.length})`
+      );
+      await sleep(delay);
+      attempt++;
+    }
+
     context.res = { status: result.status, headers, body: result.body };
   } catch (err) {
     context.log.error('Anthropic proxy error:', err.message);
@@ -63,6 +85,10 @@ module.exports = async function (context, req) {
     };
   }
 };
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 function callAnthropic(payload, key) {
   return new Promise((resolve, reject) => {

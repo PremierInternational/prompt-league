@@ -1,0 +1,22 @@
+# Node
+node_modules/
+npm-debug.log*
+
+# Azure Functions local settings — contains secrets, never commit
+api/local.settings.json
+
+# Azurite (local Table Storage emulator) data files
+.azurite/
+__azurite_db_*.json
+__blobstorage__/
+__queuestorage__/
+
+# SWA CLI cache
+.swa/
+
+# Editor / OS
+.vscode/
+.idea/
+.claude/
+.DS_Store
+Thumbs.db
